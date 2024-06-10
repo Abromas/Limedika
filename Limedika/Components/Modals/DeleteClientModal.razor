@@ -1,0 +1,49 @@
+﻿<div class="modal" tabindex="-1" style="display:@(ShowModal ? "block" : "none");" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" aria-label="Close" @onclick="CloseModal"></button>
+            </div>
+            <div class="modal-body">
+                @if (ClientIdToDelete.HasValue)
+                {
+                    <p>Are you sure you want to delete this client?</p>
+                }
+                else
+                {
+                    <p>Are you sure you want to delete @SelectedClientCount client(s)?</p>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button type="button" class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int SelectedClientCount { get; set; }
+    [Parameter] public EventCallback<Guid?> OnConfirmDelete { get; set; }
+    private bool ShowModal { get; set; }
+    private Guid? ClientIdToDelete { get; set; }
+
+    public void OpenModal(Guid? clientId = null)
+    {
+        ClientIdToDelete = clientId;
+        ShowModal = true;
+    }
+
+    public void CloseModal()
+    {
+        ShowModal = false;
+        ClientIdToDelete = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        await OnConfirmDelete.InvokeAsync(ClientIdToDelete);
+        CloseModal();
+    }
+}

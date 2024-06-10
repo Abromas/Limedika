@@ -1,0 +1,56 @@
+﻿@using Limedika.Models
+@inject IJSRuntime JS
+
+<div class="modal" tabindex="-1" style="display:@(ShowModal ? "block" : "none");" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Client</h5>
+                <button type="button" class="btn-close" aria-label="Close" @onclick="CloseModal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="clientName">Name</label>
+                    <input id="clientName" class="form-control" @bind="Client.Name" />
+                </div>
+                <div class="form-group">
+                    <label for="clientAddress">Address</label>
+                    <input id="clientAddress" class="form-control" @bind="Client.Address" />
+                </div>
+                <div class="form-group">
+                    <label for="clientPostCode">PostCode</label>
+                    <input id="clientPostCode" class="form-control" @bind="Client.PostCode" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="SaveClient">Save</button>
+                <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback<Client> OnSave { get; set; }
+    private Client Client { get; set; } = new Client();
+    private bool ShowModal { get; set; }
+
+
+    public void OpenModal(Client? client = null)
+    {
+        Client = client ?? new Client();
+        ShowModal = true;
+    }
+
+    private async Task SaveClient()
+    {
+        await OnSave.InvokeAsync(Client);
+        ShowModal = false;
+    }
+
+    public void CloseModal()
+    {
+        ShowModal = false;
+    }
+
+}

@@ -1,5 +1,349 @@
-﻿@page "/"
+﻿@page "/clients"
 
-<h1>Hello, world!</h1>
+@using Limedika.Components.Modals
+@using Limedika.Services
+@using Limedika.Models
+@using Limedika.Services.Interfaces
+@using System.Text.Json
+@using System.Text
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.WebUtilities
+@using System.Threading.Tasks
+@using System.Collections.Generic
+@using System.Linq
+@using System
 
-Welcome to your new app.
+@inject IClientService ClientService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+
+@implements IAsyncDisposable
+
+@rendermode InteractiveServer
+
+<h3>Clients</h3>
+
+<div>
+    <input type="text" @bind="searchQuery" placeholder="Search clients..." class="form-control mb-3" @oninput="SearchClients" />
+</div>
+
+@if (PaginatedClients == null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (error != null)
+{
+    <p class="text-danger">@error</p>
+}
+else
+{
+    <div class="clients-management-container d-flex justify-content-between mb-3">
+        <button class="btn btn-danger" @onclick="() => OpenDeleteModal(null)" disabled="@(selectedClientIds.Count == 0)">Delete Selected Clients</button>
+
+        <button class="btn btn-primary" @onclick="ShowCreateForm">Create New Client</button>
+    </div>
+
+    @if (showCreateForm)
+    {
+        <div class="card mt-3">
+            <div class="card-body">
+                <h4>Create New Client</h4>
+                <EditForm Model="@newClient" OnValidSubmit="HandleCreate" FormName="CreateClientForm">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    <div class="form-group">
+                        <label for="clientName">Name:</label>
+                        <InputText id="clientName" class="form-control" @bind-Value="newClient.Name" />
+                    </div>
+                    <div class="form-group">
+                        <label for="clientAddress">Address:</label>
+                        <InputText id="clientAddress" class="form-control" @bind-Value="newClient.Address" />
+                    </div>
+                    <div class="form-group">
+                        <label for="clientPostCode">PostCode:</label>
+                        <InputText id="clientPostCode" class="form-control" @bind-Value="newClient.PostCode" />
+                    </div>
+                    <button type="submit" class="btn btn-success">Create</button>
+                    <button type="button" class="btn btn-secondary" @onclick="CancelCreate">Cancel</button>
+                </EditForm>
+            </div>
+        </div>
+    }
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>
+                    <input type="checkbox" @onchange="ToggleSelectAll" />
+                </th>
+                <th>Client Name</th>
+                <th>Address</th>
+                <th>PostCode</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var client in PaginatedClients)
+            {
+                <tr @onclick="() => ToggleSelectClient(client.Id)">
+                    <td>
+                        <input type="checkbox" checked="@client.IsSelected" @onchange="(e) => SelectClient(e, client.Id)" />
+                    </td>
+                    <td>@client.Name</td>
+                    <td>@client.Address</td>
+                    <td>@client.PostCode</td>
+                    <td>
+                        <button class="btn btn-primary" @onclick:stopPropagation="true" @onclick="() => OpenEditModal(client)">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="16" height="16">
+                                <path d="M362.7 19.2L432 88.5c9.4 9.4 9.4 24.6 0 33.9L173.9 380.5l-61 10.9c-12.6 2.3-24-8.6-21.7-21.2l10.9-61L349 19.2c9.4-9.4 24.6-9.4 33.7 0zM483.3 56.6c18.7 18.7 18.7 49 0 67.7L367.4 240.2 271.8 144.6 396.4 20c18.7-18.7 49-18.7 67.7 0L483.3 56.6zM96 367.8l54.6 54.6-35.6 6.4c-12.6 2.3-24-8.6-21.7-21.2l6.4-35.6L96 367.8z" />
+                            </svg>
+                        </button>
+                        <button class="btn btn-danger" @onclick:stopPropagation="true" @onclick="() => OpenDeleteModal(client.Id)">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" width="16" height="16">
+                                <path d="M135.2 0h177.6l21.8 32H448v32H0V32h113.4zM51.2 480h345.6L419.4 128H28.6zM144 192h32v192h-32zm80 0h32v192h-32zm80 0h32v192h-32z" />
+                            </svg>
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <div class="pagination-container d-flex justify-content-between">
+        <div class="d-flex align-items-center">
+            <button class="btn btn-secondary" @onclick="PreviousPage" disabled="@(currentPage <= 1)">Previous</button>
+            <span class="mx-2">Page @currentPage of @totalPages</span>
+            <button class="btn btn-secondary" @onclick="NextPage" disabled="@(currentPage >= totalPages)">Next</button>
+        </div>
+    </div>
+}
+
+<DeleteClientModal @ref="deleteClientModal" OnConfirmDelete="DeleteSelectedClients" SelectedClientCount="@selectedClientIds.Count" />
+<EditClientModal @ref="editClientModal" OnSave="SaveEditedClient" />
+
+@code {
+    private bool isJsInteropReady = false;
+    private IJSObjectReference? module;
+    private bool showCreateForm = false;
+    private HashSet<Guid> selectedClientIds = new HashSet<Guid>();
+    private string searchQuery = string.Empty;
+    private int currentPage = 1;
+    private int pageSize = 10; // Number of clients per page
+    private int totalPages;
+    private IEnumerable<Client>? clients;
+    private IEnumerable<Client> filteredClients = new List<Client>();
+    private string? error;
+    private Client newClient = new Client();
+    private Client editingClient = new Client();
+    private DeleteClientModal deleteClientModal;
+    private EditClientModal editClientModal;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            isJsInteropReady = true;
+        }
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        if (module is not null)
+        {
+            await module.DisposeAsync();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("page", out var page) && int.TryParse(page, out var pageNumber))
+        {
+            currentPage = pageNumber;
+        }
+
+        try
+        {
+            clients = await ClientService.GetClientsAsync();
+            FilterClients();
+        }
+        catch (Exception ex)
+        {
+            error = $"Error loading clients: {ex.Message}";
+        }
+    }
+
+    private IEnumerable<Client> PaginatedClients => filteredClients
+        .Skip((currentPage - 1) * pageSize)
+        .Take(pageSize);
+
+    private async Task FetchClientsAsync()
+    {
+        try
+        {
+            clients = await ClientService.GetClientsAsync();
+            FilterClients();
+        }
+        catch (Exception ex)
+        {
+            error = $"Error loading clients: {ex.Message}";
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            FilterClients();
+        }
+    }
+
+    private void NextPage()
+    {
+        if (currentPage < totalPages)
+        {
+            currentPage++;
+            FilterClients();
+        }
+    }
+
+    private void UpdatePagination()
+    {
+        totalPages = (int)Math.Ceiling((double)filteredClients.Count() / pageSize);
+        if (totalPages == 0)
+        {
+            totalPages = 1;
+        }
+        currentPage = Math.Clamp(currentPage, 1, totalPages);
+    }
+
+    private void SearchClients(ChangeEventArgs e)
+    {
+        searchQuery = e.Value.ToString();
+        FilterClients();
+    }
+
+    private void FilterClients()
+    {
+        filteredClients = string.IsNullOrWhiteSpace(searchQuery)
+            ? clients
+            : clients?.Where(c => c.PostCode.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                                  c.Address.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        UpdatePagination();
+    }
+
+    private void ToggleSelectClient(Guid id)
+    {
+        var client = clients?.FirstOrDefault(c => c.Id == id);
+        if (client != null)
+        {
+            client.IsSelected = !client.IsSelected;
+            if (client.IsSelected)
+            {
+                selectedClientIds.Add(id);
+            }
+            else
+            {
+                selectedClientIds.Remove(id);
+            }
+        }
+    }
+
+    private void SelectClient(ChangeEventArgs e, Guid id)
+    {
+        var isChecked = (bool?)e.Value ?? false;
+        var client = clients?.FirstOrDefault(c => c.Id == id);
+        if (client != null)
+        {
+            client.IsSelected = isChecked;
+            if (isChecked)
+            {
+                selectedClientIds.Add(id);
+            }
+            else
+            {
+                selectedClientIds.Remove(id);
+            }
+        }
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        var isChecked = (bool?)e.Value ?? false;
+        foreach (var client in filteredClients)
+        {
+            client.IsSelected = isChecked;
+            if (isChecked)
+            {
+                selectedClientIds.Add(client.Id);
+            }
+            else
+            {
+                selectedClientIds.Remove(client.Id);
+            }
+        }
+    }
+
+    private void ShowCreateForm()
+    {
+        showCreateForm = true;
+        StateHasChanged();
+    }
+
+    private void CancelCreate()
+    {
+        showCreateForm = false;
+        newClient = new Client();
+        StateHasChanged();
+    }
+
+    private async Task HandleCreate()
+    {
+        await ClientService.AddClientAsync(newClient);
+        newClient = new Client();
+        showCreateForm = false;
+        await FetchClientsAsync();
+    }
+
+    private void OpenEditModal(Client client)
+    {
+        editClientModal.OpenModal(client);
+    }
+
+    private async Task SaveEditedClient(Client client)
+    {
+        await ClientService.UpdateClientAsync(client);
+        await FetchClientsAsync();
+    }
+
+    private void OpenDeleteModal(Guid? id = null)
+    {
+        deleteClientModal.OpenModal(id);
+    }
+
+    private async Task DeleteSelectedClients(Guid? id = null)
+    {
+        try
+        {
+            if (id.HasValue)
+            {
+                await ClientService.DeleteClientAsync(id.Value);
+            }
+            else
+            {
+                foreach (var selectedId in selectedClientIds)
+                {
+                    await ClientService.DeleteClientAsync(selectedId);
+                }
+            }
+            selectedClientIds.Clear();
+            await FetchClientsAsync();
+        }
+        catch (Exception ex)
+        {
+            error = $"Error deleting selected clients: {ex.Message}";
+        }
+    }
+}
+
