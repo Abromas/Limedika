@@ -1,0 +1,66 @@
+﻿@using Microsoft.AspNetCore.Components.Forms
+
+<div class="modal" tabindex="-1" style="display:@(ShowModal ? "block" : "none");" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upload Clients</h5>
+                <button type="button" class="btn-close" aria-label="Close" @onclick="CloseModal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="file" class="form-label">Choose File</label>
+                    <InputFile OnChange="HandleFileSelected" />
+                </div>
+                @if (errorMessage != null)
+                {
+                    <div class="text-danger">@errorMessage</div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CloseModal">Close</button>
+                <button type="button" class="btn btn-primary" @onclick="UploadFiles" disabled="@(!selectedFiles.Any())">Upload</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback<List<IBrowserFile>> OnFilesUploaded { get; set; }
+    private bool ShowModal { get; set; }
+    private List<IBrowserFile> selectedFiles = new List<IBrowserFile>();
+    private const long MaxFileSize = 10 * 1024 * 1024; // 10 MB
+    private string errorMessage;
+
+    public void OpenModal() => ShowModal = true;
+    public void CloseModal() => ShowModal = false;
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFiles.Clear();
+        errorMessage = null;
+
+        foreach (var file in e.GetMultipleFiles())
+        {
+            if (file.Size > MaxFileSize)
+            {
+                errorMessage = $"File '{file.Name}' exceeds the maximum allowed size of {MaxFileSize / (1024 * 1024)} MB.";
+            }
+            else
+            {
+                selectedFiles.Add(file);
+            }
+        }
+
+        StateHasChanged(); // Update the UI
+    }
+
+    private async Task UploadFiles()
+    {
+        if (selectedFiles.Any())
+        {
+            await OnFilesUploaded.InvokeAsync(selectedFiles);
+            CloseModal();
+        }
+    }
+}
