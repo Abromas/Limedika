@@ -14,11 +14,10 @@
 @using System
 
 @inject IClientService ClientService
+@inject IPostCodeService PostCodeService
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
-
 @implements IAsyncDisposable
-
 @rendermode InteractiveServer
 
 <h3>Clients</h3>
@@ -39,9 +38,9 @@ else
 {
     <div class="clients-management-container d-flex justify-content-between mb-3">
         <button class="btn btn-danger" @onclick="() => OpenDeleteModal(null)" disabled="@(selectedClientIds.Count == 0)">Delete Selected Clients</button>
-
         <button class="btn btn-primary" @onclick="ShowCreateForm">Create New Client</button>
         <button class="btn btn-secondary" @onclick="OpenFileUploadModal">Import Clients</button>
+        <button class="btn btn-info" @onclick="UpdatePostCodes">Update PostCodes</button>
     </div>
 
     @if (showCreateForm)
@@ -420,6 +419,28 @@ else
         {
             await ClientService.AddClientsAsync(clientsToImport);
             await FetchClientsAsync();
+        }
+    }
+
+    private async Task UpdatePostCodes()
+    {
+        try
+        {
+            foreach (var client in clients.Where(c => string.IsNullOrEmpty(c.PostCode)))
+            {
+                var postCode = await PostCodeService.GetPostCodeAsync(client.Address);
+                if (postCode != null)
+                {
+                    client.PostCode = postCode;
+                    await ClientService.UpdateClientAsync(client);
+                }
+            }
+
+            await FetchClientsAsync();
+        }
+        catch (Exception ex)
+        {
+            error = $"Error updating postcodes: {ex.Message}";
         }
     }
 }
