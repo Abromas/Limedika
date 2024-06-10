@@ -5,5 +5,5 @@
 /.vs
 /Limedika/bin/Debug/net8.0
 /Limedika/obj
-/Limedika/NpmJS/node_modules
 /Limedika/wwwroot/js
+/Limedika/wwwroot/NpmJS/node_modules
