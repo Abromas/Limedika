@@ -1,4 +1,5 @@
-﻿using Limedika.Services.Interfaces;
+﻿using Limedika.Business;
+using Limedika.Services.Interfaces;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -7,12 +8,12 @@ namespace Limedika.Services;
 public class PostCodeService : IPostCodeService
 {
     private readonly HttpClient _httpClient;
-    private const string ApiKey = "postit.lt-examplekey";
-    private const string BaseUrl = "https://api.postit.lt";
+    private readonly IConfiguration _configuration;
 
-    public PostCodeService(HttpClient httpClient)
+    public PostCodeService(HttpClient httpClient, IConfiguration configuration)
     {
         _httpClient = httpClient;
+        _configuration = configuration;
     }
 
     public async Task<string?> GetPostCodeAsync(string address)
@@ -20,7 +21,7 @@ public class PostCodeService : IPostCodeService
         try
         {
             var formattedAddress = address.Replace(" ", "+").Replace(",", "+");
-            var requestUrl = $"{BaseUrl}/?term={formattedAddress}&key={ApiKey}";
+            var requestUrl = $"{_configuration[Constants.AppSettings.ApiBaseUrl]}/?term={formattedAddress}&key={_configuration[Constants.AppSettings.ApiKey]}";
 
             var response = await _httpClient.GetAsync(requestUrl);
             response.EnsureSuccessStatusCode();
