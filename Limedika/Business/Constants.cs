@@ -17,4 +17,8 @@ public class Constants
         public const string ApiBaseUrl = "PostItApi:BaseUrl";
         public const string ApiKey = "PostItApi:ApiKey";
     }
+
+    public const int PostItRateLimit = 6;
+    public const int PostItRequestTimeFrameInSeconds = 1;
+
 }

@@ -9,6 +9,10 @@ public class PostCodeService : IPostCodeService
 {
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
+    private static readonly SemaphoreSlim _semaphore = new SemaphoreSlim(Constants.PostItRateLimit, Constants.PostItRateLimit);
+    private static readonly TimeSpan _rateLimitPeriod = TimeSpan.FromSeconds(Constants.PostItRequestTimeFrameInSeconds);
+    private static DateTime _lastRequestTime = DateTime.MinValue;
+    private static readonly object _lock = new object();
 
     public PostCodeService(HttpClient httpClient, IConfiguration configuration)
     {
@@ -18,9 +22,24 @@ public class PostCodeService : IPostCodeService
 
     public async Task<string?> GetPostCodeAsync(string address)
     {
+        await _semaphore.WaitAsync();
+
         try
         {
-            var formattedAddress = address.Replace(" ", "+").Replace(",", "+");
+            var now = DateTime.UtcNow;
+            var timeSinceLastRequest = now - _lastRequestTime;
+
+            if (timeSinceLastRequest < _rateLimitPeriod)
+            {
+                await Task.Delay(_rateLimitPeriod - timeSinceLastRequest);
+            }
+
+            lock (_lock)
+            {
+                _lastRequestTime = DateTime.UtcNow;
+            }
+
+            var formattedAddress = address.Replace(" ", "+");
             var requestUrl = $"{_configuration[Constants.AppSettings.ApiBaseUrl]}/?term={formattedAddress}&key={_configuration[Constants.AppSettings.ApiKey]}";
 
             var response = await _httpClient.GetAsync(requestUrl);
@@ -29,7 +48,7 @@ public class PostCodeService : IPostCodeService
             var responseContent = await response.Content.ReadAsStringAsync();
             var apiResponse = JsonSerializer.Deserialize<ApiResponse>(responseContent);
 
-            if (apiResponse != null && apiResponse.Success && apiResponse.Data?.Count > 0)
+            if (apiResponse != null && apiResponse.Success && apiResponse.Data.Count > 0)
             {
                 return apiResponse.Data[0].PostCode;
             }
@@ -38,6 +57,10 @@ public class PostCodeService : IPostCodeService
         {
             // Handle or log the exception as needed
             Console.WriteLine($"Error fetching postcode: {ex.Message}");
+        }
+        finally
+        {
+            _semaphore.Release();
         }
 
         return null;
