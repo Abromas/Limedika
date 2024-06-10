@@ -2,6 +2,7 @@
 using Limedika.Models;
 using Limedika.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using EFCore.BulkExtensions;
 
 namespace Limedika.Services;
 
@@ -30,6 +31,11 @@ public class ClientService : IClientService
         await _context.SaveChangesAsync();
     }
 
+    public async Task AddClientsAsync(List<Client> clients)
+    {
+        await _context.BulkInsertAsync(clients);
+    }
+
     public async Task UpdateClientAsync(Client client)
     {
         _context.Entry(client).State = EntityState.Modified;
@@ -44,6 +50,12 @@ public class ClientService : IClientService
             _context.Clients.Remove(client);
             await _context.SaveChangesAsync();
         }
+    }
+
+    public async Task DeleteClientsAsync(List<Guid> clientIds)
+    {
+        var clients = await _context.Clients.Where(c => clientIds.Contains(c.Id)).ToListAsync();
+        await _context.BulkDeleteAsync(clients);
     }
 
     public bool ClientExists(Guid id)

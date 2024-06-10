@@ -334,6 +334,7 @@ else
             return;
         }
 
+        newClient.Id = Guid.NewGuid();
         await ClientService.AddClientAsync(newClient);
         newClient = new Client();
         showCreateForm = false;
@@ -366,10 +367,7 @@ else
             }
             else
             {
-                foreach (var selectedId in selectedClientIds)
-                {
-                    await ClientService.DeleteClientAsync(selectedId);
-                }
+                await ClientService.DeleteClientsAsync(selectedClientIds.ToList());
             }
             selectedClientIds.Clear();
             await FetchClientsAsync();
@@ -389,6 +387,7 @@ else
     {
         duplicates.Clear();
         var existingClients = await ClientService.GetClientsAsync();
+        var clientsToImport = new List<Client>();
 
         foreach (var file in files)
         {
@@ -403,15 +402,24 @@ else
                 {
                     if (!existingClients.Any(c => c.Name == client.Name && c.Address == client.Address))
                     {
-                        await ClientService.AddClientAsync(client);
+                        if (client.Id == Guid.Empty)
+                        {
+                            client.Id = Guid.NewGuid();
+                        }
+                        clientsToImport.Add(client);
                     }
                     else
                     {
                         duplicates.Add(client);
                     }
                 }
-                await FetchClientsAsync();
             }
+        }
+
+        if (clientsToImport.Any())
+        {
+            await ClientService.AddClientsAsync(clientsToImport);
+            await FetchClientsAsync();
         }
     }
 }

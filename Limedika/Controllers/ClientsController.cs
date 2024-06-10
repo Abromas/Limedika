@@ -1,4 +1,5 @@
-﻿using Limedika.Data;
+﻿using EFCore.BulkExtensions;
+using Limedika.Data;
 using Limedika.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -77,6 +78,14 @@ public class ClientsController : ControllerBase
         return CreatedAtAction(nameof(GetClient), new { id = client.Id }, client);
     }
 
+    // POST: api/Clients/Bulk
+    [HttpPost("Bulk")]
+    public async Task<IActionResult> PostClientsBulk(List<Client> clients)
+    {
+        await _context.BulkInsertAsync(clients);
+        return Ok();
+    }
+
     // DELETE: api/Clients/5
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteClient(Guid id)
@@ -90,6 +99,15 @@ public class ClientsController : ControllerBase
         _context.Clients.Remove(client);
         await _context.SaveChangesAsync();
 
+        return NoContent();
+    }
+
+    // DELETE: api/Clients/Bulk
+    [HttpDelete("Bulk")]
+    public async Task<IActionResult> DeleteClientsBulk([FromBody] List<Guid> clientIds)
+    {
+        var clients = await _context.Clients.Where(c => clientIds.Contains(c.Id)).ToListAsync();
+        await _context.BulkDeleteAsync(clients);
         return NoContent();
     }
 
