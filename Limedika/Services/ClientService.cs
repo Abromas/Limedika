@@ -60,25 +60,65 @@ public class ClientService : IClientService
 
     public async Task UpdateClientAsync(Client client)
     {
+        // Detach the incoming client to prevent it from being tracked
+        _context.Entry(client).State = EntityState.Detached;
+
+        // Fetch the existing client from the database
         var existingClient = await _context.Clients.FindAsync(client.Id);
         if (existingClient != null)
         {
-            var oldName = existingClient.Name;
+            var logs = new List<LogEntry>();
 
-            _context.Entry(client).State = EntityState.Modified;
-            await _context.SaveChangesAsync();
-
-            if (oldName != client.Name)
+            if (existingClient.Name != client.Name)
             {
-                await _logService.LogAsync(new LogEntry
+                logs.Add(new LogEntry
                 {
                     Action = "Entry Updated",
                     EntityName = nameof(Client),
                     EntityId = client.Id,
                     FieldName = nameof(Client.Name),
-                    OldValue = oldName,
+                    OldValue = existingClient.Name,
                     NewValue = client.Name
                 });
+                existingClient.Name = client.Name;
+            }
+
+            if (existingClient.Address != client.Address)
+            {
+                logs.Add(new LogEntry
+                {
+                    Action = "Entry Updated",
+                    EntityName = nameof(Client),
+                    EntityId = client.Id,
+                    FieldName = nameof(Client.Address),
+                    OldValue = existingClient.Address,
+                    NewValue = client.Address
+                });
+                existingClient.Address = client.Address;
+            }
+
+            if (existingClient.PostCode != client.PostCode)
+            {
+                logs.Add(new LogEntry
+                {
+                    Action = "Entry Updated",
+                    EntityName = nameof(Client),
+                    EntityId = client.Id,
+                    FieldName = nameof(Client.PostCode),
+                    OldValue = existingClient.PostCode,
+                    NewValue = client.PostCode
+                });
+                existingClient.PostCode = client.PostCode;
+            }
+
+            // Mark the existing client as modified
+            _context.Entry(existingClient).State = EntityState.Modified;
+            await _context.SaveChangesAsync();
+
+            // Log changes
+            foreach (var log in logs)
+            {
+                await _logService.LogAsync(log);
             }
         }
     }
